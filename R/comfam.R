@@ -542,7 +542,7 @@ predict_gamm4 <- function(model, newdata) {
     # Make sure it's aligned with the original data
     # (Only works safely if newdata = model data)
     if (nrow(newdata) == length(re_pred)) {
-      fixed_pred + re_contrib
+      fixed_pred + re_pred
     } else {
       warning("Subject-specific REs available only for training data.")
       fixed_pred
