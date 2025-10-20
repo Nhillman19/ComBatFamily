@@ -138,8 +138,14 @@ comfam <- function(data, bat, covar = NULL, model = lm, formula = NULL,
     pmod$batch[,which(levels(bat) == ref.batch)] <- 1
   }
 
-  stand_mean <- sapply(fits, predict, newdata = pmod, type = "response")
-  resid_mean <- sapply(fits, predict, newdata = mod, type = "response")
+  if(model == "gamm4"){
+    stand_mean <- sapply(fits, predict_gamm4, newdata = pmod)
+    resid_mean <- sapply(fits, predict_gamm4, newdata = mod)
+  } else {
+    stand_mean <- sapply(fits, predict, newdata = pmod, type = "response")
+    resid_mean <- sapply(fits, predict, newdata = mod, type = "response")
+  }
+  
 
   if (!is.null(ref.batch)) {
     var_pooled <- apply((data - resid_mean)[ref, , drop = FALSE], 2, scl) *
@@ -524,4 +530,24 @@ plot.comfam <- function(object, feature) {
   dem <- sum(indic * (1 - u^2) * (1 - 5*u^2))^2
 
   n * num/dem
+}
+
+predict_gamm4 <- function(model, newdata) {
+  fixed_pred <- predict(model$gam, newdata = newdata, type = "link")
+  if (!is.null(model$mer)) {
+    Z <- lme4::getME(model$mer, "Zt")  
+    b <- lme4::getME(model$mer, "b")
+    re_pred <- as.vector(Matrix::t(Z) %*% b)
+    
+    # Make sure it's aligned with the original data
+    # (Only works safely if newdata = model data)
+    if (nrow(newdata) == length(re_pred)) {
+      fixed_pred + re_contrib
+    } else {
+      warning("Subject-specific REs available only for training data.")
+      fixed_pred
+    }
+  } else {
+    fixed_pred
+  }
 }
