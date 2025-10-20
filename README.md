@@ -38,7 +38,7 @@ The R package can be installed via devtools by running the following code
 
 ```
 # install.packages("remotes")
-remotes::install_github("andy1764/ComBatFamily")
+remotes::install_github("Nhillman19/ComBatFamily")
 ```
 
 Then, you can load this package via
