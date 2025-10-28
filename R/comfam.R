@@ -120,10 +120,9 @@ comfam <- function(data, bat, covar = NULL, model = lm, formula = NULL,
   } else {
     fits <- apply(data, 2, function(y) {
       dat <- data.frame(y = y, mod)
-
       # include batch in formula to target pooled mean/variance
       bat_formula <- update(formula, ~ . + batch + -1)
-      do.call(model, list(formula = bat_formula, data = dat, ...))
+      do.call(model, list(formula = bat_formula, data = dat))
     })
   }
 
@@ -139,8 +138,8 @@ comfam <- function(data, bat, covar = NULL, model = lm, formula = NULL,
   }
 
   if(model == "gamm4"){
-    stand_mean <- sapply(fits, predict_gamm4, newdata = pmod)
-    resid_mean <- sapply(fits, predict_gamm4, newdata = mod)
+    stand_mean <- sapply(fits, predict_gamm4,newdata = pmod, type = "pmod")
+    resid_mean <- sapply(fits, predict_gamm4,newdata = mod, type = "mod")
   } else {
     stand_mean <- sapply(fits, predict, newdata = pmod, type = "response")
     resid_mean <- sapply(fits, predict, newdata = mod, type = "response")
@@ -329,16 +328,16 @@ predict.comfam <- function(object, newdata, newbat, newcovar = NULL,
   # } else {
   #   warning(cat("Model of class", model_class, "may be unsupported"))
   # }
-
+  
   data <- as.matrix(newdata)
   n <- nrow(data)
   p <- ncol(data)
-
+  
   if ((p == 1) & eb) {
     warning("EB step skipped for univariate data.")
     eb <- FALSE
   }
-
+  
   # Specify robust location/scale estimators
   if (robust.LS) {
     loc <- median
@@ -347,7 +346,7 @@ predict.comfam <- function(object, newdata, newbat, newcovar = NULL,
     loc <- mean
     scl <- var
   }
-
+  
   bat <- object$batch.info$batch
   batch_mod <- object$batch.info$batch.mod
   stand_mean <- object$estimates$stand.mean
@@ -357,7 +356,7 @@ predict.comfam <- function(object, newdata, newbat, newcovar = NULL,
   gamma_star <- object$estimates$gamma.star
   delta_star <- object$estimates$delta.star
   fits <- object$fits
-
+  
   #### Match new batches to old batches ####
   known <- rownames(gamma_hat)
   bat <- droplevels(bat)
@@ -365,21 +364,21 @@ predict.comfam <- function(object, newdata, newbat, newcovar = NULL,
   bat_levels <- union(known, levels(newbat))
   newbat_app <- factor(newbat, bat_levels)
   batches <- lapply(levels(newbat_app), function(x) which(newbat_app == x))
-
+  
   # new batches to estimate/adjust
   newbat_est <- which(bat_levels %in% setdiff(levels(newbat), known))
   newbat_adj <- which(bat_levels %in% levels(newbat))
-
+  
   #### Standardize the data ####
   # resize batch_mod
   batch <- matrix(batch_mod[1,], n, nlevels(bat), byrow = TRUE)
-
+  
   if (is.null(newcovar)) {
     pmod <- data.frame(I(batch))
   } else {
     pmod <- data.frame(newcovar, I(batch))
   }
-
+  
   stand_mean <- sapply(fits, predict, newdata = pmod, type = "response", ...)
   if (hasArg("sigma.formula")) {
     sd_mat <- sapply(fits, predict, newdata = pmod, what = "sigma",
@@ -387,9 +386,9 @@ predict.comfam <- function(object, newdata, newbat, newcovar = NULL,
   } else {
     sd_mat <- sapply(sqrt(var_pooled), rep, n)
   }
-
+  
   data_stand <- (data - stand_mean)/sd_mat
-
+  
   #### Obtain location and scale adjustments ####
   # get naive estimates for new batches
   for (i in newbat_est) {
@@ -398,14 +397,14 @@ predict.comfam <- function(object, newdata, newbat, newcovar = NULL,
     delta_hat <- rbind(delta_hat,
                        apply(data_stand[batches[[i]],, drop = FALSE], 2, scl))
   }
-
+  
   rownames(gamma_hat) <- rownames(delta_hat) <- bat_levels
-
+  
   # Empirical Bayes adjustments for new batches
   if (eb) {
     for (i in newbat_est) {
       n_b <- length(batches[[i]])
-
+      
       # method of moments estimates
       g_bar <- mean(gamma_hat[i,])
       g_var <- var(gamma_hat[i,])
@@ -413,30 +412,30 @@ predict.comfam <- function(object, newdata, newbat, newcovar = NULL,
       d_var <- var(delta_hat[i,])
       d_a <- (2 * d_var + d_bar^2)/d_var
       d_b <- (d_bar * d_var + d_bar^3)/d_var
-
+      
       # adjust within batch
       bdat <- data_stand[batches[[i]],]
       g_orig <- gamma_hat[i,]
       g_old  <- gamma_hat[i,]
       d_old  <- delta_hat[i,]
-
+      
       change_old <- 1
       change <- 1
       count  <- 0
       while(change > 10e-5){
         g_new <- (n_b*g_var*g_orig + d_old*g_bar)/(n_b*g_var + d_old)
-
+        
         if (robust.LS) {
           sum2 <- (n_b-1) * sapply(1:p, function(v) {
             .biweight_midvar(bdat[,v], g_new[v])})
         } else {
           sum2   <- colSums(sweep(bdat, 2, g_new)^2)
         }
-
+        
         d_new <- (sum2/2 + d_b)/(n_b/2 + d_a - 1)
-
+        
         change <- max(abs(g_new - g_old)/g_old, abs(d_new - d_old)/d_old)
-
+        
         if (count > 30) {
           if (change > change_old) {
             warning("Empirical Bayes step failed to converge after 30 iterations,
@@ -444,25 +443,25 @@ predict.comfam <- function(object, newdata, newbat, newcovar = NULL,
             break
           }
         }
-
+        
         g_old <- g_new
         d_old <- d_new
-
+        
         change_old <- change
         count <- count+1
       }
-
+      
       gamma_star <- rbind(gamma_star, g_new)
       delta_star <- rbind(delta_star, d_new)
     }
-
+    
     rownames(gamma_star) <- rownames(gamma_hat)
     rownames(delta_star) <- rownames(delta_hat)
   } else {
     gamma_star <- gamma_hat
     delta_star <- delta_hat
   }
-
+  
   #### Harmonize the data ####
   # Remove batch effects
   data_nb <- data_stand
@@ -472,10 +471,10 @@ predict.comfam <- function(object, newdata, newbat, newcovar = NULL,
     data_nb[batches[[i]],] <- sweep(data_nb[batches[[i]],, drop = FALSE], 2,
                                     sqrt(delta_star[i,]), "/")
   }
-
+  
   # Reintroduce covariate effects
   data_combat <- data_nb*sd_mat + stand_mean
-
+  
   estimates <-  list(
     stand.mean = stand_mean,
     stand.sd = sd_mat,
@@ -485,9 +484,9 @@ predict.comfam <- function(object, newdata, newbat, newcovar = NULL,
     gamma.star = gamma_star,
     delta.star = delta_star
   )
-
+  
   batch_info <- object$batch.info
-
+  
   out <- list(dat.combat = data_combat, batch.info = batch_info,
               fits = fits, estimates = estimates)
   class(out) <- "comfam"
@@ -513,6 +512,7 @@ plot.comfam <- function(object, feature) {
   plot(object$fits[[feature]])
 }
 
+
 .biweight_midvar <- function(data, center=NULL, norm.unbiased = TRUE) {
   if (is.null(center)) {
     center <- median(data)
@@ -532,22 +532,15 @@ plot.comfam <- function(object, feature) {
   n * num/dem
 }
 
-predict_gamm4 <- function(model, newdata) {
-  fixed_pred <- predict(model$gam, newdata = newdata, type = "link")
-  if (!is.null(model$mer)) {
-    Z <- lme4::getME(model$mer, "Zt")  
-    b <- lme4::getME(model$mer, "b")
-    re_pred <- as.vector(Matrix::t(Z) %*% b)
-    
-    # Make sure it's aligned with the original data
-    # (Only works safely if newdata = model data)
-    if (nrow(newdata) == length(re_pred)) {
-      fixed_pred + re_pred
-    } else {
-      warning("Subject-specific REs available only for training data.")
-      fixed_pred
-    }
-  } else {
-    fixed_pred
+predict_gamm4 <- function(model,newdata,type) {
+  X <- lme4::getME(model$mer, "X")
+  if(type == "pmod"){
+    X[,grepl("^Xbatchbat", colnames(X))] <- newdata$batch
   }
+  beta <- lme4::getME(model$mer, "beta")
+  Zt <- lme4::getME(model$mer, "Zt")  
+  b <- lme4::getME(model$mer, "b")
+  as.vector(X %*% beta) + as.vector(Matrix::t(Zt) %*% b)
 }
+
+
