@@ -138,8 +138,9 @@ comfam <- function(data, bat, covar = NULL, model = lm, formula = NULL,
     pmod$batch[] <- 0
     pmod$batch[,which(levels(bat) == ref.batch)] <- 1
   }
-
-  if(hasArg("random")){
+  
+  # case when using gamm4
+  if(hasArg("random") & !hasArg("fixed")){
     stand_mean <- sapply(fits, predict_gamm4,newdata = pmod, type = "pmod")
     resid_mean <- sapply(fits, predict_gamm4,newdata = mod, type = "mod")
   } else {
