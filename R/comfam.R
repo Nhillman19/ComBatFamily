@@ -44,6 +44,8 @@
 #' @examples
 #' comfam(iris[,1:2], iris$Species)
 #' comfam(iris[,1:2], iris$Species, iris[3:4], lm, y ~ Petal.Length + Petal.Width)
+
+
 comfam <- function(data, bat, covar = NULL, model = lm, formula = NULL,
                    eb = TRUE, robust.LS = FALSE, ref.batch = NULL, ...) {
   if (hasArg("family")) {
@@ -115,14 +117,14 @@ comfam <- function(data, bat, covar = NULL, model = lm, formula = NULL,
 
       # include batch in formula to target pooled mean/variance
       bat_formula <- update(formula, ~ . + batch + -1)
-      do.call(model, c(list(fixed = bat_formula, data = dat), addargs))
+      do.call(model, list(fixed = bat_formula, data = dat))
     })
   } else {
     fits <- apply(data, 2, function(y) {
       dat <- data.frame(y = y, mod)
       # include batch in formula to target pooled mean/variance
       bat_formula <- update(formula, ~ . + batch + -1)
-      do.call(model, list(formula = bat_formula, data = dat))
+      do.call(model, c(list(formula = bat_formula, data = dat,...)))
     })
   }
 
@@ -145,7 +147,6 @@ comfam <- function(data, bat, covar = NULL, model = lm, formula = NULL,
     resid_mean <- sapply(fits, predict, newdata = mod, type = "response")
   }
   
-
   if (!is.null(ref.batch)) {
     var_pooled <- apply((data - resid_mean)[ref, , drop = FALSE], 2, scl) *
       (nref - 1)/nref
@@ -538,9 +539,7 @@ predict_gamm4 <- function(model,newdata,type) {
     X[,grepl("^Xbatchbat", colnames(X))] <- newdata$batch
   }
   beta <- lme4::getME(model$mer, "beta")
-  Zt <- lme4::getME(model$mer, "Zt")  
+  Z <- lme4::getME(model$mer, "Z")  
   b <- lme4::getME(model$mer, "b")
-  as.vector(X %*% beta) + as.vector(Matrix::t(Zt) %*% b)
+  as.vector(X %*% beta) + as.vector(Z %*% b)
 }
-
-
