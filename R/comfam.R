@@ -117,7 +117,7 @@ comfam <- function(data, bat, covar = NULL, model = lm, formula = NULL,
 
       # include batch in formula to target pooled mean/variance
       bat_formula <- update(formula, ~ . + batch + -1)
-      do.call(model, c(list(fixed = bat_formula, data = dat),addargs))
+      do.call(model, list(fixed = bat_formula, data = dat))
     })
   } else {
     fits <- apply(data, 2, function(y) {
@@ -544,4 +544,3 @@ predict_gamm4 <- function(model,newdata,type) {
   b <- lme4::getME(model$mer, "b")
   as.vector(X %*% beta) + as.vector(Z %*% b)
 }
-
