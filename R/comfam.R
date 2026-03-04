@@ -536,8 +536,11 @@ plot.comfam <- function(object, feature) {
 
 predict_gamm4 <- function(model,newdata,type) {
   X <- lme4::getME(model$mer, "X")
-  if(type == "pmod"){
-    X[,grepl("^Xbatchbat", colnames(X))] <- newdata$batch
+  if (type == "pmod") {
+    bat_cols_X <- grepl("^Xbatch", colnames(X))         
+    B <- as.matrix(newdata$batch)
+    bat_cols_B <- sub("^Xbatch", "", colnames(X)[keep])
+    X[, bat_cols_X] <- B[, bat_cols_B, drop = FALSE] 
   }
   beta <- lme4::getME(model$mer, "beta")
   Z <- lme4::getME(model$mer, "Z")  
